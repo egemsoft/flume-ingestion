@@ -231,9 +231,10 @@ public class SNMPSource extends AbstractSource implements EventDrivenSource, Con
                     PDU command = e.getPDU();
                     if (command != null) {
                         ChannelProcessor channelProcessor = getChannelProcessor();
+                        String commandWithRemoteAddr = String.format("Remote Address: %s | Trap Details: %s", e.getPeerAddress().toString(), command.toString());
                         sourceCounter.addToEventReceivedCount(1);
                         sourceCounter.incrementAppendBatchReceivedCount();
-                        channelProcessor.processEvent(EventBuilder.withBody(command.toString(),
+                        channelProcessor.processEvent(EventBuilder.withBody(commandWithRemoteAddr,
                                 Charsets.UTF_8));
                         sourceCounter.addToEventAcceptedCount(1);
                         sourceCounter.incrementAppendBatchAcceptedCount();
