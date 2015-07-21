@@ -20,6 +20,8 @@ import static com.stratio.ingestion.source.snmptraps.SNMPSourceConstants.*;
 import java.io.IOException;
 import java.util.Locale;
 
+import java.util.HashMap;
+
 import org.apache.flume.Context;
 import org.apache.flume.EventDrivenSource;
 import org.apache.flume.channel.ChannelProcessor;
@@ -57,11 +59,13 @@ import org.snmp4j.security.nonstandard.PrivAES256With3DESKeyExtension;
 import org.snmp4j.smi.OID;
 import org.snmp4j.smi.OctetString;
 import org.snmp4j.smi.UdpAddress;
+import org.snmp4j.smi.VariableBinding;
 import org.snmp4j.transport.AbstractTransportMapping;
 import org.snmp4j.transport.DefaultUdpTransportMapping;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
+import com.google.gson.Gson;
 
 public class SNMPSource extends AbstractSource implements EventDrivenSource, Configurable {
 
@@ -228,18 +232,29 @@ public class SNMPSource extends AbstractSource implements EventDrivenSource, Con
 
             CommandResponder trapsCatch = new CommandResponder() {
                 public synchronized void processPdu(CommandResponderEvent e) {
-                    PDU command = e.getPDU();
-                    if (command != null) {
-                        ChannelProcessor channelProcessor = getChannelProcessor();
-                        Long currentTimestamp = System.currentTimeMillis();
-                        String commandWithDetails = String.format("TS::%d | RA::%s | TD::%s",
-                                currentTimestamp, e.getPeerAddress().toString(), command.toString());
-                        sourceCounter.addToEventReceivedCount(1);
-                        sourceCounter.incrementAppendBatchReceivedCount();
-                        channelProcessor.processEvent(EventBuilder.withBody(commandWithDetails,
-                                Charsets.UTF_8));
-                        sourceCounter.addToEventAcceptedCount(1);
-                        sourceCounter.incrementAppendBatchAcceptedCount();
+			PDU command = e.getPDU();
+			HashMap hm = new HashMap();
+			HashMap vbMap = new HashMap();
+			if (command != null) {
+			    ChannelProcessor channelProcessor = getChannelProcessor();
+			    Long currentTimestamp = System.currentTimeMillis();
+			    hm.put("timestamp", String.valueOf(currentTimestamp));
+			    hm.put("trap_type", String.valueOf(command.getType()));
+			    hm.put("remote_addr", e.getPeerAddress().toString());
+			    hm.put("error_index", String.valueOf(command.getErrorIndex()));
+			    hm.put("error_status", String.valueOf(command.getErrorStatus()));
+			    hm.put("request_id", String.valueOf(command.getRequestID()));
+			    hm.put("varbinds", vbMap);
+			    for (VariableBinding varBinding : command.getVariableBindings()) {
+			            vbMap.put(varBinding.getOid(), varBinding.getVariable().toString());
+			            }
+			    String jsonRes = new Gson().toJson(hm);
+			    sourceCounter.addToEventReceivedCount(1);
+			    sourceCounter.incrementAppendBatchReceivedCount();
+			    channelProcessor.processEvent(EventBuilder.withBody(jsonRes,
+			            Charsets.UTF_8));
+			    sourceCounter.addToEventAcceptedCount(1);
+			    sourceCounter.incrementAppendBatchAcceptedCount();
                     }
                 }
             };
